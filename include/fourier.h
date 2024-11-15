@@ -19,7 +19,7 @@ enum source_extrapolation {extrap_zero,extrap_only_max,extrap_only_max_units,ext
 
 enum halofit_integral_type {halofit_integral_one, halofit_integral_two, halofit_integral_three};
 
-enum hmcode_baryonic_feedback_model {nl_emu_dmonly, nl_owls_dmonly, nl_owls_ref, nl_owls_agn, nl_owls_dblim, nl_user_defined};
+enum hmcode_baryonic_feedback_model {nl_emu_dmonly, nl_owls_dmonly, nl_owls_ref, nl_owls_agn, nl_owls_dblim, nl_baryon_frac, nl_user_defined};
 enum out_sigmas {out_sigma,out_sigma_prime,out_sigma_disp};
 
 /**
@@ -47,6 +47,9 @@ struct fourier {
                                                     in hmcode (dmonly, gas cooling, Agn or supernova feedback) */
   double c_min;      /** for HMcode: minimum concentration in Bullock 2001 mass-concentration relation */
   double eta_0;      /** for HMcode: halo bloating parameter */
+  double spk_a;      /** for SPk baryon fraction suppression model */
+  double spk_b;	     /** for SPk baryon fraction suppression model */
+  double spk_M_piv;  /** for SPk baryon fraction suppression model */
   double z_infinity; /** for HMcode: z value at which Dark Energy correction is evaluated needs to be at early times (default */
 
   short has_pk_eq;  /**< flag: in case wa_fld is defined and non-zero, should we use the pk_eq method? */
@@ -558,6 +561,14 @@ extern "C" {
                                      struct fourier_workspace * pnw
                                      );
 
+  int spk_suppression_at_k_z(
+                           struct background * pba,
+                           struct fourier * pfo,
+                           double k,
+                           double z,
+                           double * spk_pk_ratio,
+                           struct fourier_workspace * pnw
+			     );
 #ifdef __cplusplus
 }
 #endif

@@ -3180,8 +3180,9 @@ int fourier_hmcode(
   double * nu_arr;
 
   double * p1h_integrand;
-
-
+  
+  double spk_pk_ratio;
+  
   /** include precision parameters that control the number of entries in the growth and sigma tables */
   ng = ppr->n_hmcode_tables;
   nsig = ppr->n_hmcode_tables;
@@ -3558,6 +3559,21 @@ int fourier_hmcode(
     if (pk_2h<0.) pk_2h=0.;
     pk_nl[index_k] = pow((pow(pk_1h, alpha) + pow(pk_2h, alpha)), (1./alpha))/pow(pfo->k[index_k],3)/anorm; //converted back to P_k
 
+    if (pfo->feedback == nl_baryon_frac) {
+      
+      class_call(spk_suppression_at_k_z(
+					pba,
+					pfo,
+					pfo->k[index_k]/pba->h,
+					z_at_tau,
+					&spk_pk_ratio,
+					pnw),
+		 pba->error_message,
+		 pfo->error_message);
+      
+      pk_nl[index_k] = pk_nl[index_k] * spk_pk_ratio;
+    }
+    
     free(p1h_integrand);
   }
 
@@ -3643,7 +3659,7 @@ int fourier_hmcode_workspace_init(
     class_alloc(pnw->sigma_disp_100[index_pk],pfo->tau_size*sizeof(double),pfo->error_message);
     class_alloc(pnw->sigma_prime[index_pk],pfo->tau_size*sizeof(double),pfo->error_message);
   }
-
+  
   /** - fill table with scale independent growth factor */
 
   class_call(fourier_hmcode_fill_growtab(ppr,pba,pfo,pnw),
@@ -3805,6 +3821,12 @@ int fourier_hmcode_baryonic_feedback(
       break;
     }
 
+  case nl_baryon_frac:
+    {
+      pfo->eta_0 = 0.603;
+      pfo->c_min = 3.13;
+    }  
+    
   case nl_user_defined:
     {
       /* eta_0 and c_min already passed in input */
@@ -4472,5 +4494,116 @@ int fourier_hmcode_sigmaprime_at_z(
   }
 
 
+  return _SUCCESS_;
+}
+
+/**
+ * Compute suppression of the power spectrum following the SPk model of 2305.09710
+ *
+ * @param pba            Input: pointer to background structure
+ * @param pfo            Input: pointer to fourier structure
+ * @param k              Input: comoving wave number in h/Mpc
+ * @param z              Input: redshift
+ * @param pk_ratio       Output: Pk_baryons / Pk_DMO
+ * @param pnw            Output: pointer to nonlinear workspace
+ * @return the error status
+ */
+
+int spk_suppression_at_k_z(
+			   struct background * pba,
+			   struct fourier * pfo,
+			   double k,
+			   double z,
+			   double * spk_pk_ratio,
+			   struct fourier_workspace * pnw
+			   ) {
+  double spk_M_piv, spk_a, spk_b;
+  double Omega_m, Omega_b;
+  double spk_M_hat, spk_alpha_z, spk_beta_z, spk_gamma_z;
+  double spk_lambda_a, spk_lambda_b;
+  double spk_mu_a, spk_mu_b, spk_mu_c;
+  double spk_nu_a, spk_nu_b, spk_nu_c;
+  double spk_lambda_k_z, spk_mu_k_z, spk_nu_k_z;
+  double spk_fb, spk_f_tilde;
+  
+  /** Values from table 3 for M500 */ 
+  double spk_alpha_0 = 14.783423122120318;
+  double spk_alpha_1 = -0.999062404857228;
+  double spk_alpha_2 = 0.12062854541689262;
+  double spk_beta_0 = 14.620528368613265;
+  double spk_beta_1 = -0.9136466201011957;
+  double spk_beta_2 = 0.10835389086945699;
+  double spk_gamma_0 = 0.9671320682693298;
+  double spk_gamma_1 = -0.03185388045484575;
+  double spk_gamma_2 = 0.02650236152450093;
+
+  /** Compute functions alpha(z), beta(z), gamma(z) using Eq. 3 */
+  spk_alpha_z = spk_alpha_0 + spk_alpha_1 * (1.0 + z) + spk_alpha_2 * (1.0 + z) * (1.0 + z);
+  spk_beta_z = spk_beta_0 + spk_beta_1 * (1.0 + z) + spk_beta_2 * (1.0 + z) * (1.0 + z);
+  spk_gamma_z =	spk_gamma_0 + spk_gamma_1 * (1.0 + z) +	spk_gamma_2 * (1.0 + z) * (1.0 + z);
+
+  /** Compute M_hat using Eq 2 */
+  spk_M_hat = spk_alpha_z - (spk_alpha_z - spk_beta_z) * pow(k, spk_gamma_z);  
+  spk_M_hat = pow(10., spk_M_hat);
+  
+  /** Values from table 4 for M500 */
+  double spk_lambda_a_0 = 0.019349810078190303;
+  double spk_lambda_a_1 = -0.007410668383424459;
+  double spk_lambda_a_2 = 0.0008334762393555539;
+  double spk_lambda_b_0 = 2.9566773924238143;
+  double spk_lambda_b_1 = 0.6205340408676114;
+  double spk_lambda_b_2 = -0.001928273640110775;
+
+  double spk_mu_a_0 = 0.715853343781141;
+  double spk_mu_a_1 = -0.19276613600825665;
+  double spk_mu_a_2 = 0.04948240117059147;
+  double spk_mu_b_0 = 3.385355123440431;
+  double spk_mu_b_1 = 0.9658906605139421;
+  double spk_mu_b_2 = -0.06825861100375574;
+  double spk_mu_c_0 = 4.457257708010122;
+  double spk_mu_c_1 = -2.191853871334233;
+  double spk_mu_c_2 = 0.45457701107254733;
+
+  double spk_nu_a_0 = 478.86477329610375;
+  double spk_nu_a_1 = 429.88795783439946;
+  double spk_nu_a_2 = 249.25655627821902;
+  double spk_nu_b_0 = -11.227459319819815;
+  double spk_nu_b_1 = -0.5581080204509223;
+  double spk_nu_b_2 = 0.4489962047114509;
+  double spk_nu_c_0 = 3.499449440557995;
+  double spk_nu_c_1 = -0.08488559389068073;
+  double spk_nu_c_2 = -0.0923847866118189;
+
+  /** Compute functions lambda(k, z), mu(k, z), nu(k, z) using Eqs. 3 and 6-8 */
+  spk_lambda_a = spk_lambda_a_0 + spk_lambda_a_1 * (1.0 + z) + spk_lambda_a_2 * (1.0 + z) * (1.0 + z);
+  spk_lambda_b = spk_lambda_b_0 + spk_lambda_b_1 * (1.0 + z) + spk_lambda_b_2 * (1.0 + z) * (1.0 + z);
+
+  spk_mu_a = spk_mu_a_0 + spk_mu_a_1 * (1.0 + z) + spk_mu_a_2 * (1.0 + z) * (1.0 + z);
+  spk_mu_b = spk_mu_b_0 + spk_mu_b_1 * (1.0 + z) + spk_mu_b_2 * (1.0 + z) * (1.0 + z);
+  spk_mu_c = spk_mu_c_0 + spk_mu_c_1 * (1.0 + z) + spk_mu_c_2 * (1.0 + z) * (1.0 + z);
+
+  spk_nu_a = spk_nu_a_0 + spk_nu_a_1 * (1.0 + z) + spk_nu_a_2 * (1.0 + z) * (1.0 + z);
+  spk_nu_b = spk_nu_b_0 + spk_nu_b_1 * (1.0 + z) + spk_nu_b_2 * (1.0 + z) * (1.0 + z);
+  spk_nu_c = spk_nu_c_0 + spk_nu_c_1 * (1.0 + z) + spk_nu_c_2 * (1.0 + z) * (1.0 + z);
+
+  spk_lambda_k_z = 1 + spk_lambda_a * exp(spk_lambda_b * log10(k));
+  spk_mu_k_z = spk_mu_a + (1-spk_mu_a) / (1 + exp(spk_mu_b * log10(k) + spk_mu_c));
+  spk_nu_k_z = spk_nu_a * exp(-pow((log10(k) - spk_nu_b), 2.) / 2. / pow(spk_nu_c, 2.0));
+
+  /** Compute functions fb(M) using input parameters */
+  spk_M_piv = pfo->spk_M_piv;
+  spk_a = pfo->spk_a;
+  spk_b = pfo->spk_b;
+
+  spk_fb = spk_a * pow((spk_M_hat / spk_M_piv), spk_b);
+  
+  /** Compute functions fb_tilde from fb(M) using Eq. 5 */  
+  Omega_m = pba->Omega0_m;
+  Omega_b = pba->Omega0_b;
+  spk_f_tilde = spk_fb;
+
+  /** Compute power spectrum suppression using Eq. 4 */
+  * spk_pk_ratio = spk_lambda_k_z - (spk_lambda_k_z - spk_mu_k_z) * exp(-spk_nu_k_z * spk_f_tilde);
+  
   return _SUCCESS_;
 }

@@ -3663,8 +3663,8 @@ int input_read_parameters_nonlinear(struct file_content * pfc,
                                     ErrorMsg errmsg){
 
   /** Define local variables */
-  int flag1,flag2,flag3;
-  double param1,param2,param3;
+  int flag1,flag2,flag3,flag4,flag5,flag6;
+  double param1,param2,param3,param4,param5,param6;
   char string1[_ARGUMENT_LENGTH_MAX_];
 
   /** 1) Non-linearity */
@@ -3739,12 +3739,25 @@ int input_read_parameters_nonlinear(struct file_content * pfc,
         if (strstr(string1,"owls_dblim") != NULL) {
           pfo->feedback = nl_owls_dblim;
         }
+	if (strstr(string1,"baryon_frac") != NULL) {
+          pfo->feedback = nl_baryon_frac;
+        }
       }
 
       class_call(parser_read_double(pfc,"eta_0",&param2,&flag2,errmsg),
                  errmsg,
                  errmsg);
       class_call(parser_read_double(pfc,"c_min",&param3,&flag3,errmsg),
+                 errmsg,
+                 errmsg);
+
+      class_call(parser_read_double(pfc,"spk_a",&param4,&flag4,errmsg),
+                 errmsg,
+                 errmsg);
+      class_call(parser_read_double(pfc,"spk_b",&param5,&flag5,errmsg),
+                 errmsg,
+                 errmsg);
+      class_call(parser_read_double(pfc,"spk_M_piv",&param6,&flag6,errmsg),
                  errmsg,
                  errmsg);
 
@@ -3766,6 +3779,12 @@ int input_read_parameters_nonlinear(struct file_content * pfc,
         pfo->feedback = nl_user_defined;
         class_read_double("c_min", pfo->c_min);
         pfo->eta_0 = 0.98 - 0.12*pfo->c_min;
+      }
+      else if ((flag4==_TRUE_) && (flag5==_TRUE_) && (flag6==_TRUE_)) {
+        pfo->feedback = nl_baryon_frac;
+	class_read_double("spk_a", pfo->spk_a);
+	class_read_double("spk_b", pfo->spk_b);
+	class_read_double("spk_M_piv", pfo->spk_M_piv);
       }
 
       class_read_double("z_infinity", pfo->z_infinity);
